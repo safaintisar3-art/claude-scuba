@@ -1,6 +1,11 @@
 """Thin client for the Alpaca trading API (paper trading by default)."""
 
 import requests
+import truststore
+
+# Use the operating system's certificate store (fixes CERTIFICATE_VERIFY_FAILED
+# on Windows machines where Python's bundled certificates don't match).
+truststore.inject_into_ssl()
 
 
 class BrokerError(Exception):
