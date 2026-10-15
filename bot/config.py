@@ -34,16 +34,22 @@ class Settings:
     max_daily_loss: float = 100.0
     trading_enabled: bool = True
     kill_switch_file: str = "STOP"
+    # Self-running trader (bot.autotrader)
+    trade_qty: int = 1
+    fast_ema: int = 9
+    slow_ema: int = 21
+    check_interval_seconds: int = 60
+    flatten_minutes_before_close: int = 10
 
     @property
     def base_url(self) -> str:
         return LIVE_URL if self.live_trading else PAPER_URL
 
 
-def load_settings() -> Settings:
+def load_settings(require_webhook_secret: bool = True) -> Settings:
     load_dotenv()
     secret = os.getenv("WEBHOOK_SECRET", "")
-    if len(secret) < 16:
+    if require_webhook_secret and len(secret) < 16:
         raise RuntimeError("WEBHOOK_SECRET must be set and at least 16 characters long.")
     return Settings(
         webhook_secret=secret,
@@ -57,4 +63,9 @@ def load_settings() -> Settings:
         max_daily_loss=float(os.getenv("MAX_DAILY_LOSS", "100")),
         trading_enabled=_bool("TRADING_ENABLED", True),
         kill_switch_file=os.getenv("KILL_SWITCH_FILE", "STOP"),
+        trade_qty=int(os.getenv("TRADE_QTY", "1")),
+        fast_ema=int(os.getenv("FAST_EMA", "9")),
+        slow_ema=int(os.getenv("SLOW_EMA", "21")),
+        check_interval_seconds=int(os.getenv("CHECK_INTERVAL_SECONDS", "60")),
+        flatten_minutes_before_close=int(os.getenv("FLATTEN_MINUTES_BEFORE_CLOSE", "10")),
     )

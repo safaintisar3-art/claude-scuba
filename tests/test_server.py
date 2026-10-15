@@ -1,44 +1,11 @@
 import pytest
+from fakes import FakeBroker
 
 from bot.config import Settings
 from bot.risk import TradeLog
 from bot.server import create_app
 
 SECRET = "test-secret-1234567890"
-
-
-class FakeBroker:
-    def __init__(self):
-        self.market_open = True
-        self.positions = {}
-        self.price = 100.0
-        self.equity = 10_000.0
-        self.last_equity = 10_000.0
-        self.orders = []
-        self.closed_all = False
-
-    def account(self):
-        return {"equity": str(self.equity), "last_equity": str(self.last_equity)}
-
-    def is_market_open(self):
-        return self.market_open
-
-    def position_qty(self, symbol):
-        return self.positions.get(symbol, 0.0)
-
-    def latest_price(self, symbol):
-        return self.price
-
-    def submit_market_order(self, symbol, qty, side):
-        self.orders.append((symbol, qty, side))
-        return {"id": f"order-{len(self.orders)}"}
-
-    def close_position(self, symbol):
-        self.orders.append((symbol, self.positions.pop(symbol), "close"))
-        return {"id": "close"}
-
-    def close_all_positions(self):
-        self.closed_all = True
 
 
 @pytest.fixture
