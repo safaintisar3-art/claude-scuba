@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home Office Picks</title>
+  <meta name="description" content="Researched recommendations for home office gear: desks, chairs, lighting and video-call equipment.">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+  <script src="products.js"></script>
+</head>
+<body>
+  <div class="disclosure-bar">
+    As an Amazon Associate we earn from qualifying purchases. <a href="disclosure.html">Learn more</a>
+  </div>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a href="index.html" class="logo" data-site-name>DeskSetup Picks</a>
+      <nav>
+        <a href="#picks">Picks</a>
+        <a href="#guide">Buying guide</a>
+        <a href="disclosure.html">Disclosure</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <h1 data-tagline>Honest picks for a better home office</h1>
+        <p>We research the gear so you don't have to. Every pick says who it's for and what to watch out for.</p>
+        <a href="#picks" class="btn btn-primary">See the picks</a>
+      </div>
+    </section>
+
+    <section id="picks" class="wrap">
+      <div class="toolbar">
+        <div class="filters" id="filters" role="tablist" aria-label="Categories"></div>
+        <input type="search" id="search" placeholder="Search products…" aria-label="Search products">
+      </div>
+      <div class="grid" id="grid"></div>
+      <p class="empty" id="empty" hidden>No products match that search.</p>
+    </section>
+
+    <section id="guide" class="wrap guide">
+      <h2>How to build a comfortable home office</h2>
+      <ol>
+        <li><strong>Start with the chair and desk.</strong> You touch them all day. Your elbows should sit at about 90° with your feet flat on the floor.</li>
+        <li><strong>Put your screen at eye level.</strong> The top of the monitor should be at or slightly below eye height, about an arm's length away.</li>
+        <li><strong>Fix your lighting.</strong> Light from the side or front, never only from behind the screen.</li>
+        <li><strong>Upgrade audio before video.</strong> People forgive a grainy picture; they don't forgive bad sound.</li>
+        <li><strong>Tame the cables last.</strong> A tray and a few ties make a setup feel finished.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>&copy; <span data-year></span> <span data-site-name>DeskSetup Picks</span>. Contact: <a data-email href="#"></a></p>
+      <p class="small">As an Amazon Associate we earn from qualifying purchases. Prices and availability are shown on Amazon and may change.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
