@@ -1,0 +1,36 @@
+//@version=5
+// Example long-only day trading strategy: fast/slow EMA crossover.
+// It is a TEMPLATE to show how alerts reach the bot, not a recommendation.
+// Backtest it in TradingView's Strategy Tester before trusting it with anything.
+//
+// Alert setup: Create Alert -> Condition: this strategy -> "Order fills only"
+// Webhook URL: https://<your-server>/webhook
+// Message:     {{strategy.order.alert_message}}
+strategy("EMA Cross -> Bot", overlay=true, default_qty_type=strategy.fixed, default_qty_value=1)
+
+secret    = input.string("change-me", "Webhook secret (same as WEBHOOK_SECRET)")
+qty       = input.int(1, "Shares per trade", minval=1)
+fastLen   = input.int(9,  "Fast EMA")
+slowLen   = input.int(21, "Slow EMA")
+exitHour  = input.int(15, "Flatten at hour (exchange time)")
+exitMin   = input.int(50, "Flatten at minute")
+
+fast = ta.ema(close, fastLen)
+slow = ta.ema(close, slowLen)
+plot(fast, "Fast EMA", color.teal)
+plot(slow, "Slow EMA", color.orange)
+
+msg(action) =>
+    '{"secret":"' + secret + '","symbol":"' + syminfo.ticker + '","action":"' + action + '","qty":' + str.tostring(qty) + '}'
+
+lateInDay = hour(time, syminfo.timezone) > exitHour or (hour(time, syminfo.timezone) == exitHour and minute(time, syminfo.timezone) >= exitMin)
+
+if ta.crossover(fast, slow) and not lateInDay
+    strategy.entry("Long", strategy.long, qty=qty, alert_message=msg("buy"))
+
+if ta.crossunder(fast, slow)
+    strategy.close("Long", alert_message=msg("close"))
+
+// Day trading: never hold overnight.
+if lateInDay and strategy.position_size > 0
+    strategy.close("Long", comment="EOD", alert_message=msg("close"))
