@@ -1,0 +1,4 @@
+# Netlify settings: serve the affiliate website folder as-is (no build step).
+[build]
+  publish = "affiliate-site"
+  command = ""
