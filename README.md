@@ -51,39 +51,34 @@ receives those alerts, runs safety checks, and sends the order to
 
 ## C. BTC signal bot (advice only, for Kalshi or any exchange)
 
-Tells you **when to buy, sell, short or wait** on Bitcoin. It **never places trades**:
-you make the trade yourself in Kalshi (or anywhere). No account or API key needed.
-Prices come from Coinbase's free BTC-USD data. Kalshi's BTC perp follows the same market,
-so prices will be very close but not exact.
+Tells you **when to buy or sell** Bitcoin. It **never places trades**: you make the trade
+yourself in Kalshi (or anywhere). No account or API key needed. Prices come from Coinbase's
+free BTC-USD data, which tracks the same market as Kalshi's BTC perp.
 
 ```bash
-python -m bot.btc_signals --backtest   # check first: how the rules did over the last ~3.5 days
+python -m bot.btc_signals --backtest   # replay the rules over ~8 years
 python -m bot.btc_signals --once       # current recommendation, then exit
-python -m bot.btc_signals              # keep watching; alerts on every new call
+python -m bot.btc_signals              # keep watching; phone alert on every BUY / SELL
+python -m bot.btc_signals --reset      # forget the position the bot thinks you hold
 ```
 
-**The rules** ([`bot/btc_strategy.py`](bot/btc_strategy.py)), on 5-minute bars:
+**Default mode: daily breakout** (`BTC_MODE=daily`). This was the winner of the walk-forward search below:
 
 | Signal | When |
 |---|---|
-| **BUY** | 20-bar average above 50-bar (uptrend) **and** price breaks above the last 2 hours' high, or dips to the 20-bar average and bounces |
-| **SHORT** | the mirror image in a downtrend (turn off with `BTC_ALLOW_SHORT=false`) |
-| **SELL / COVER** | stop hit, target hit, or the trend flips |
-| **HOLD / WAIT** | keep what you have / no setup, do nothing |
+| **BUY** | a day closes above the highest price of the previous **55 days** |
+| **SELL** | a day closes below the lowest price of the previous **10 days** (this level rises as the trend continues) |
+| **WAIT / HOLD** | anything else |
 
-Every BUY or SHORT comes with a **stop** (1.5x the typical bar size away) and a **target**
-(2x the stop distance). When you get an alert, enter the trade, then put the stop in yourself.
+It trades a **few times a year**, sits out downtrends, and makes its money from a few
+big trends. Half its trades lose, usually by 2-13%. It is a slow, swing-trading strategy,
+not day trading, and it's built for **no or low leverage**.
+
+`BTC_MODE=fast` switches back to the original 5-minute rules. Those **lost money** in testing
+and are kept only for comparison.
 
 **Phone alerts:** install the free **ntfy** app, subscribe to a topic name nobody would
-guess (e.g. `btc-alerts-k7q2zx`), and set `NTFY_TOPIC` to the same name in `.env`.
-Anyone who knows the topic name can read the alerts, so make it random.
-
-The bot keeps track of the position *it* recommended (in `btc_signal_state.json`). It doesn't
-know what you actually did. If you skipped a call or traded on your own, run it with `--reset`.
-
-> ⚠️ This is a simple mechanical rule set, not a prediction. It will have losing streaks,
-> and fees plus leverage magnify both wins and losses. Run `--backtest` and watch it for a
-> while before you trade real money on its calls.
+guess, and set `NTFY_TOPIC` to the same name in `.env`.
 
 ### Does it actually work? (walk-forward test, Nov 2026)
 
@@ -99,7 +94,19 @@ has never seen, and roll forward**, over one year of real BTC prices (270 unseen
 | Boosted trees, best setting | accuracy 52% vs 50% coin flip, **loses after fees** |
 
 The models are only slightly better than a coin flip, and fees cost more than that small
-edge in every setup we tried. **Treat the signals as a second opinion, not a money-maker.**
+edge in every setup we tried.
+
+**Wider search** (`python -m research.strategy_lab`): 6 strategy families (trend, crossover,
+momentum, breakout, mean reversion, volatility-filtered trend) on 15-min, 1-hour, 6-hour and
+daily bars, all walk-forward, with the last 90 days locked away until the end.
+
+- Every 15-minute and 1-hour strategy lost money on unseen data.
+- Daily trend strategies did best. Daily breakout made **+38.8%/year vs +33.9% for
+  buy-and-hold (2018-2026)**, with a smaller worst drop (-51% vs -77%).
+- On the locked 90-day holdout it **lost 9.1% while buy-and-hold lost 24.9%** (3 trades).
+  That's a small sample, and the gain over buy-and-hold is modest.
+
+**Use the signals as a second opinion, not a guarantee.**
 Re-run it yourself: `pip install -r research/requirements.txt`, `python research/fetch_history.py`,
 `python -m research.walk_forward_rules rules`, `python research/walk_forward_ml.py`.
 

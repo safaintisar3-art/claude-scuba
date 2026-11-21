@@ -158,6 +158,40 @@ def evaluate(candles: list[Candle], pos: Position | None, p: Params) -> Advice:
                   f"No setup. Trend {extras['trend']}, range {range_lo:,.0f}-{range_hi:,.0f}.", None, None, extras)
 
 
+def evaluate_daily_breakout(candles: list[Candle], pos: Position | None,
+                            entry_days: int = 55, exit_days: int = 10) -> Advice:
+    """Slow trend strategy on DAILY candles (long only).
+
+    BUY when the day closes above the highest high of the previous `entry_days` days.
+    SELL when the day closes below the lowest low of the previous `exit_days` days.
+    The exit level trails upward as the trend continues, so winners are allowed to run.
+
+    In walk-forward testing (2018-2026, settings picked only from past data) this beat
+    buy-and-hold on risk-adjusted return. Every faster strategy we tested lost money.
+    Expect only a handful of signals per year, and drops of 30-50% along the way."""
+    need = entry_days + 1
+    if len(candles) < need:
+        return Advice("WAIT", candles[-1].close if candles else 0.0,
+                      f"Need {need} daily bars of history, have {len(candles)}.", pos)
+    bar = candles[-1]
+    hi = max(c.high for c in candles[-1 - entry_days:-1])
+    lo = min(c.low for c in candles[-1 - exit_days:-1])
+    extras = {"entry_level": hi, "exit_level": lo}
+    if pos is not None:
+        if bar.close < lo:
+            return Advice("SELL", bar.close, f"Daily close below the {exit_days}-day low ({lo:,.0f}). Sell.",
+                          None, _pnl_pct(pos, bar.close), extras)
+        pos.stop = lo
+        return Advice("HOLD", bar.close, f"Keep the long. Sell if a day closes below {lo:,.0f}.",
+                      pos, _pnl_pct(pos, bar.close), extras)
+    if bar.close > hi:
+        new = Position("long", bar.close, lo, float("inf"), f"close above {entry_days}-day high {hi:,.0f}", bar.t)
+        return Advice("BUY", bar.close, f"Daily close above the {entry_days}-day high ({hi:,.0f}). Buy. "
+                      f"Sell later if a day closes below the {exit_days}-day low (now {lo:,.0f}).", new, None, extras)
+    return Advice("WAIT", bar.close, f"No trend breakout. Buy only if a day closes above {hi:,.0f}.",
+                  None, None, extras)
+
+
 @dataclass
 class BacktestResult:
     trades: list[dict]
@@ -178,12 +212,17 @@ class BacktestResult:
                 f"| best {max(r):+.2f}%, worst {min(r):+.2f}% (before leverage)")
 
 
-def backtest(candles: list[Candle], p: Params, fee_pct: float = 0.1) -> BacktestResult:
-    """Replay the rules bar by bar over history. A still-open position at the end is ignored."""
+def backtest(candles: list[Candle], p: Params | None, fee_pct: float = 0.1, evaluator=None,
+             start: int | None = None) -> BacktestResult:
+    """Replay the rules bar by bar over history. A still-open position at the end is ignored.
+    `evaluator(candles, pos)` defaults to the fast 5-minute rules with params `p`."""
+    if evaluator is None:
+        evaluator = lambda cs, pos: evaluate(cs, pos, p)  # noqa: E731
+        start = min_bars(p) if start is None else start
     pos: Position | None = None
     trades = []
-    for i in range(min_bars(p), len(candles) + 1):
-        adv = evaluate(candles[:i], pos, p)
+    for i in range(start or 1, len(candles) + 1):
+        adv = evaluator(candles[:i], pos)
         if adv.action in ("SELL", "COVER") and pos is not None:
             trades.append({"side": pos.side, "entry": pos.entry, "exit": adv.price,
                            "opened_t": pos.opened_t, "closed_t": candles[i - 1].t,

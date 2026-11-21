@@ -1,4 +1,9 @@
-"""BTC signal bot: tells you when to buy, sell, short or wait. It never places trades.
+"""BTC signal bot: tells you when to buy, sell or wait. It never places trades.
+
+Two modes (set BTC_MODE in .env):
+  daily  (default) slow trend breakout on daily candles. The only approach that held up
+                   in walk-forward testing; expect a few signals per year.
+  fast             the original 5-minute rules. Lost money in testing; kept for comparison.
 
 Prices come from Coinbase's free public data (BTC-USD, no account or key needed).
 Kalshi's BTC perp tracks the same market, so levels will be very close but not identical.
@@ -6,7 +11,7 @@ Kalshi's BTC perp tracks the same market, so levels will be very close but not i
 Run it:
     python -m bot.btc_signals              # watch live, alert on every new recommendation
     python -m bot.btc_signals --once       # print the current recommendation and exit
-    python -m bot.btc_signals --backtest   # how the rules did over the last few days
+    python -m bot.btc_signals --backtest   # replay the rules over history
 
 Phone alerts (optional, free): install the "ntfy" app, subscribe to a topic name that
 only you know (e.g. btc-alerts-<random letters>), and put it in .env as NTFY_TOPIC.
@@ -25,7 +30,7 @@ import requests
 import truststore
 from dotenv import load_dotenv
 
-from .btc_strategy import Candle, Params, Position, backtest, evaluate, min_bars
+from .btc_strategy import Candle, Params, Position, backtest, evaluate, evaluate_daily_breakout, min_bars
 
 truststore.inject_into_ssl()  # use the computer's certificate store (fixes SSL errors on Windows)
 
@@ -33,7 +38,7 @@ log = logging.getLogger("btc_signals")
 
 COINBASE_URL = "https://api.exchange.coinbase.com/products/{product}/candles"
 VALID_GRANULARITIES = (60, 300, 900, 3600, 21600, 86400)
-STATE_FILE = Path("btc_signal_state.json")
+STATE_FILE = Path("btc_signal_state.json")  # replaced per mode in main()
 
 
 def fetch_candles(product: str, granularity: int, count: int, session=requests) -> list[Candle]:
@@ -109,43 +114,61 @@ def main():
 
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    global STATE_FILE
     p = params_from_env()
     product = os.getenv("BTC_PRODUCT", "BTC-USD")
-    gran = int(os.getenv("BTC_GRANULARITY", "300"))
+    mode = os.getenv("BTC_MODE", "daily").lower()
     topic = os.getenv("NTFY_TOPIC", "")
+    coin = product.split("-")[0]
+    if mode == "daily":
+        gran, history, poll = 86400, 80, 600
+        entry_days = int(os.getenv("BTC_ENTRY_DAYS", "55"))
+        exit_days = int(os.getenv("BTC_EXIT_DAYS", "10"))
+        evaluator = lambda cs, pos: evaluate_daily_breakout(cs, pos, entry_days, exit_days)  # noqa: E731
+        start = entry_days + 1
+        label = f"daily breakout ({entry_days}-day high in, {exit_days}-day low out)"
+        STATE_FILE = Path(f"btc_signal_state_daily_{coin}.json")
+    else:
+        gran, history, poll = int(os.getenv("BTC_GRANULARITY", "300")), min_bars(p) + 100, 30
+        evaluator = lambda cs, pos: evaluate(cs, pos, p)  # noqa: E731
+        start = min_bars(p)
+        label = f"fast {gran // 60}-min rules (lost money in testing)"
+        STATE_FILE = Path(f"btc_signal_state_fast_{coin}.json")
     bar_min = gran // 60
+    stamp = (lambda t: datetime.fromtimestamp(t).strftime("%Y-%m-%d")) if mode == "daily" else fmt_time
 
     if args.reset:
         save_position(None)
 
     if args.backtest:
-        candles = fetch_candles(product, gran, args.bars)
-        res = backtest(candles, p, args.fee)
-        print(f"{product} {bar_min}-min bars, {fmt_time(candles[0].t)} to {fmt_time(candles[-1].t)}")
+        bars = args.bars if mode != "daily" or args.bars != 1000 else 3000
+        candles = fetch_candles(product, gran, bars)
+        res = backtest(candles, None, args.fee, evaluator=evaluator, start=start)
+        print(f"{product} {label}, {stamp(candles[0].t)} to {stamp(candles[-1].t)}")
         for tr in res.trades:
-            print(f"  {tr['side']:5} {fmt_time(tr['opened_t'])} @ {tr['entry']:>9,.0f} -> "
-                  f"{fmt_time(tr['closed_t'])} @ {tr['exit']:>9,.0f}  {tr['pnl_pct'] - args.fee:+.2f}%  "
+            print(f"  {tr['side']:5} {stamp(tr['opened_t'])} @ {tr['entry']:>9,.0f} -> "
+                  f"{stamp(tr['closed_t'])} @ {tr['exit']:>9,.0f}  {tr['pnl_pct'] - args.fee:+.2f}%  "
                   f"({tr['reason']})")
         print(res.summary())
         return
 
     pos = load_position()
     last_bar = None
-    log.info("watching %s on %s-min bars | alerts to phone: %s", product, bar_min,
+    log.info("watching %s | %s | alerts to phone: %s", product, label,
              "on" if topic else "off (set NTFY_TOPIC)")
     while True:
         try:
-            candles = fetch_candles(product, gran, min_bars(p) + 100)
+            candles = fetch_candles(product, gran, history)
             if candles and candles[-1].t != last_bar:
                 last_bar = candles[-1].t
-                adv = evaluate(candles, pos, p)
-                line = f"{adv.action:5} BTC {adv.price:,.0f} | {adv.message}"
+                adv = evaluator(candles, pos)
+                line = f"{adv.action:5} {coin} {adv.price:,.0f} | {adv.message}"
                 if adv.pnl_pct is not None:
                     line += f" ({adv.pnl_pct:+.2f}% before fees/leverage)"
                 log.info(line)
                 if adv.action not in ("HOLD", "WAIT"):
                     print("\a", end="", flush=True)  # terminal beep
-                    notify(topic, f"BTC: {adv.action}", line)
+                    notify(topic, f"{coin}: {adv.action}", line)
                 pos = adv.position
                 save_position(pos)
         except (requests.RequestException, ValueError) as e:
@@ -153,7 +176,7 @@ def main():
         if args.once:
             return
         try:
-            time.sleep(30)
+            time.sleep(poll)
         except KeyboardInterrupt:
             log.info("stopped")
             return

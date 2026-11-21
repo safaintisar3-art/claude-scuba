@@ -115,3 +115,27 @@ def test_fetch_candles_paginates_and_drops_unfinished_bar(monkeypatch):
     ts = [c.t for c in candles]
     assert ts == sorted(ts) and len(set(ts)) == 450
     assert ts[-1] == sess.now_bar - 300  # newest *closed* bar
+
+
+from bot.btc_strategy import evaluate_daily_breakout  # noqa: E402
+
+
+def days(closes):
+    return [Candle(i * 86400, c, c + 1, c - 1, c) for i, c in enumerate(closes)]
+
+
+def test_daily_breakout_buy_hold_sell():
+    flat = [100.0] * 60
+    adv = evaluate_daily_breakout(days(flat + [105]), None, 55, 10)
+    assert adv.action == "BUY" and adv.position.side == "long"
+    pos = adv.position
+    climb = flat + [105, 108, 112]
+    adv = evaluate_daily_breakout(days(climb), pos, 55, 10)
+    assert adv.action == "HOLD" and adv.position is pos
+    adv = evaluate_daily_breakout(days(climb + [95]), pos, 55, 10)
+    assert adv.action == "SELL" and adv.position is None and adv.pnl_pct < 0
+
+
+def test_daily_breakout_waits_inside_range():
+    assert evaluate_daily_breakout(days([100.0] * 60 + [100.5]), None, 55, 10).action == "WAIT"
+    assert evaluate_daily_breakout(days([100.0] * 10), None, 55, 10).action == "WAIT"
