@@ -5,3 +5,5 @@ __pycache__/
 .pytest_cache/
 trades.jsonl
 STOP
+btc_signal_state*.json
+research/data/
