@@ -85,6 +85,24 @@ know what you actually did. If you skipped a call or traded on your own, run it 
 > and fees plus leverage magnify both wins and losses. Run `--backtest` and watch it for a
 > while before you trade real money on its calls.
 
+### Does it actually work? (walk-forward test, Nov 2026)
+
+We tested the rules and two machine-learning models (logistic regression and boosted
+trees) the honest way: **train on a past window, then test on the next window the model
+has never seen, and roll forward**, over one year of real BTC prices (270 unseen days).
+
+| Approach | Unseen-data result, 0.1% fees per trade |
+|---|---|
+| Bot's current rules, 5-min bars (56 days) | 898 trades, 30% wins, **-98%** (sum of trade %, no leverage) |
+| Bot's rules re-tuned every window, 15-min bars | 424 trades, 28% wins, **-59%** |
+| Logistic regression, best setting | accuracy 52% vs 50% coin flip, **loses after fees** |
+| Boosted trees, best setting | accuracy 52% vs 50% coin flip, **loses after fees** |
+
+The models are only slightly better than a coin flip, and fees cost more than that small
+edge in every setup we tried. **Treat the signals as a second opinion, not a money-maker.**
+Re-run it yourself: `pip install -r research/requirements.txt`, `python research/fetch_history.py`,
+`python -m research.walk_forward_rules rules`, `python research/walk_forward_ml.py`.
+
 ## What you need
 
 1. **Python 3.11+**. On Windows: `winget install Python.Python.3.12`

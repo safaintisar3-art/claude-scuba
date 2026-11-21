@@ -6,3 +6,4 @@ __pycache__/
 trades.jsonl
 STOP
 btc_signal_state.json
+research/data/
