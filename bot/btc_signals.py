@@ -22,9 +22,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+import truststore
 from dotenv import load_dotenv
 
 from .btc_strategy import Candle, Params, Position, backtest, evaluate, min_bars
+
+truststore.inject_into_ssl()  # use the computer's certificate store (fixes SSL errors on Windows)
 
 log = logging.getLogger("btc_signals")
 
