@@ -49,6 +49,42 @@ receives those alerts, runs safety checks, and sends the order to
 > outages or fast markets. The included strategy is only a template, not advice.
 > Run on paper for weeks before considering live mode.
 
+## C. BTC signal bot (advice only, for Kalshi or any exchange)
+
+Tells you **when to buy, sell, short or wait** on Bitcoin. It **never places trades**:
+you make the trade yourself in Kalshi (or anywhere). No account or API key needed.
+Prices come from Coinbase's free BTC-USD data. Kalshi's BTC perp follows the same market,
+so prices will be very close but not exact.
+
+```bash
+python -m bot.btc_signals --backtest   # check first: how the rules did over the last ~3.5 days
+python -m bot.btc_signals --once       # current recommendation, then exit
+python -m bot.btc_signals              # keep watching; alerts on every new call
+```
+
+**The rules** ([`bot/btc_strategy.py`](bot/btc_strategy.py)), on 5-minute bars:
+
+| Signal | When |
+|---|---|
+| **BUY** | 20-bar average above 50-bar (uptrend) **and** price breaks above the last 2 hours' high, or dips to the 20-bar average and bounces |
+| **SHORT** | the mirror image in a downtrend (turn off with `BTC_ALLOW_SHORT=false`) |
+| **SELL / COVER** | stop hit, target hit, or the trend flips |
+| **HOLD / WAIT** | keep what you have / no setup, do nothing |
+
+Every BUY or SHORT comes with a **stop** (1.5x the typical bar size away) and a **target**
+(2x the stop distance). When you get an alert, enter the trade, then put the stop in yourself.
+
+**Phone alerts:** install the free **ntfy** app, subscribe to a topic name nobody would
+guess (e.g. `btc-alerts-k7q2zx`), and set `NTFY_TOPIC` to the same name in `.env`.
+Anyone who knows the topic name can read the alerts, so make it random.
+
+The bot keeps track of the position *it* recommended (in `btc_signal_state.json`). It doesn't
+know what you actually did. If you skipped a call or traded on your own, run it with `--reset`.
+
+> ⚠️ This is a simple mechanical rule set, not a prediction. It will have losing streaks,
+> and fees plus leverage magnify both wins and losses. Run `--backtest` and watch it for a
+> while before you trade real money on its calls.
+
 ## What you need
 
 1. **Python 3.11+**. On Windows: `winget install Python.Python.3.12`
